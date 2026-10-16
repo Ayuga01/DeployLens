@@ -1,16 +1,11 @@
-from collections.abc import Generator
+from datetime import datetime
 
-import pytest
-from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
-from app.main import app, events
-
-
-@pytest.fixture(autouse=True)
-def clear_event_repository() -> Generator[None, None, None]:
-    events.clear()
-    yield
-    events.clear()
+from app.database import session_factory
+from app.models import EventModel
+from app.repository import add_event, get_event, to_event
+from app.schemas import Event
 
 
 def event_payload(**overrides: object) -> dict[str, object]:
@@ -27,9 +22,7 @@ def event_payload(**overrides: object) -> dict[str, object]:
     return payload
 
 
-def test_create_and_read_back_event() -> None:
-    client = TestClient(app)
-
+def test_create_and_read_back_event(client) -> None:
     create_response = client.post("/events", json=event_payload())
 
     assert create_response.status_code == 201
@@ -41,15 +34,15 @@ def test_create_and_read_back_event() -> None:
     assert read_response.json() == create_response.json()
 
 
-def test_invalid_event_type_returns_validation_error() -> None:
-    response = TestClient(app).post("/events", json=event_payload(event_type="incident"))
+def test_invalid_event_type_returns_validation_error(client) -> None:
+    response = client.post("/events", json=event_payload(event_type="incident"))
 
     assert response.status_code == 422
     assert any(error["loc"][-1] == "event_type" for error in response.json()["detail"])
 
 
-def test_missing_timezone_returns_validation_error() -> None:
-    response = TestClient(app).post(
+def test_missing_timezone_returns_validation_error(client) -> None:
+    response = client.post(
         "/events", json=event_payload(timestamp="2025-01-01T12:00:00")
     )
 
@@ -61,8 +54,7 @@ def test_missing_timezone_returns_validation_error() -> None:
     )
 
 
-def test_identical_duplicate_returns_existing_event() -> None:
-    client = TestClient(app)
+def test_identical_duplicate_returns_existing_event(client) -> None:
     payload = event_payload()
 
     first_response = client.post("/events", json=payload)
@@ -73,9 +65,7 @@ def test_identical_duplicate_returns_existing_event() -> None:
     assert duplicate_response.json() == first_response.json()
 
 
-def test_conflicting_duplicate_returns_conflict() -> None:
-    client = TestClient(app)
-
+def test_conflicting_duplicate_returns_conflict(client) -> None:
     client.post("/events", json=event_payload())
     response = client.post("/events", json=event_payload(message="Deployment failed"))
 
@@ -83,8 +73,30 @@ def test_conflicting_duplicate_returns_conflict() -> None:
     assert response.json() == {"detail": "event_id already exists with a different payload"}
 
 
-def test_unknown_event_returns_not_found() -> None:
-    response = TestClient(app).get("/events/does-not-exist")
+def test_unknown_event_returns_not_found(client) -> None:
+    response = client.get("/events/does-not-exist")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "event not found"}
+
+
+def test_event_persists_across_repository_session_boundaries(database) -> None:
+    payload = Event(**event_payload(metadata={"environment": "production"}))
+    sessions = session_factory(database)
+
+    with sessions() as first_session:
+        persisted = add_event(first_session, payload)
+        assert persisted.event_id == payload.event_id
+
+    with sessions() as second_session:
+        loaded = get_event(second_session, payload.event_id)
+        assert loaded is not None
+        assert to_event(loaded) == payload
+        assert loaded.timestamp == datetime.fromisoformat("2025-01-01T12:00:00+00:00")
+
+
+def test_event_row_has_unique_primary_key(database) -> None:
+    with Session(database) as session:
+        columns = {column.name: column for column in EventModel.__table__.columns}
+        assert columns["event_id"].primary_key
+        assert columns["metadata"].nullable is False

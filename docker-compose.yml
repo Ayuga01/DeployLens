@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: deploylens
       POSTGRES_USER: deploylens
-      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_PASSWORD: deploylens
     ports:
       - "5432:5432"
     volumes:

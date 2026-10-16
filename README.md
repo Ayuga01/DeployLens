@@ -1,7 +1,7 @@
 # DeployLens API
 
 DeployLens is a minimal FastAPI service foundation with liveness and normalized
-event ingestion endpoints. Events are stored in memory for now.
+event ingestion endpoints. Events are persisted with SQLAlchemy and Alembic.
 
 ## Requirements
 
@@ -19,7 +19,28 @@ uv sync --locked
 ```
 
 To configure local environment values, copy `.env.example` to `.env`. The
-health endpoint does not require environment variables or secrets.
+default `DATABASE_URL` is `sqlite:///./deploylens.db`, so local development
+does not require Docker or PostgreSQL. The PostgreSQL URL supported by the
+included Compose service is:
+
+```text
+postgresql+psycopg://deploylens:deploylens@localhost:5432/deploylens
+```
+
+Apply the schema before starting the API:
+
+```bash
+make migrate
+```
+
+`make migrate` reads `DATABASE_URL` from the environment and runs Alembic's
+migrations. For example, to use PostgreSQL locally:
+
+```bash
+docker compose up -d postgres
+DATABASE_URL=postgresql+psycopg://deploylens:deploylens@localhost:5432/deploylens make migrate
+DATABASE_URL=postgresql+psycopg://deploylens:deploylens@localhost:5432/deploylens make run
+```
 
 ## Run
 
@@ -77,8 +98,8 @@ or:
 make test
 ```
 
-The test uses FastAPI's `TestClient` and does not start a server or require a
-database.
+The offline test suite uses an isolated temporary SQLite database per test. It
+does not require Docker, PostgreSQL, or a developer database.
 
 ## Deploy with Docker
 
@@ -89,13 +110,28 @@ docker build -t deploylens-api .
 docker run --rm -p 8000:8000 deploylens-api
 ```
 
-`docker-compose.yml` documents a local Postgres 16 service for future API
-work. Start it with `docker compose up postgres` when Docker is available; it
-is not required by the current health endpoint.
+`docker-compose.yml` provides a PostgreSQL 16 service with the development
+credentials used in the URL above. Start it with `docker compose up -d
+postgres` when Docker is available. Docker is only needed for PostgreSQL
+development; SQLite remains the default for offline work.
 
 ## Project layout
 
-- `app/main.py` — FastAPI application, health route, and in-memory event repository
-- `tests/test_health.py` / `tests/test_events.py` — offline endpoint tests
+- `app/main.py` — FastAPI application factory and API routes
+- `app/database.py` — configurable SQLAlchemy engine and session dependency
+- `app/models.py` / `app/repository.py` — ORM model and persistence operations
+- `alembic/` / `alembic.ini` — database migration configuration and revisions
+- `tests/` — isolated SQLite endpoint and persistence tests
 - `pyproject.toml` / `uv.lock` — project metadata and locked dependencies
 - `Dockerfile` / `docker-compose.yml` — container and local database setup
+- `docs/` — architecture, flow, constraints, decisions, testing, threat, failure,
+  rollback, and handover notes
+- `features/` — scoped feature traces and verification logs
+
+## Defend what you ship
+
+This project follows the repository workflow in the attached *Defend What You
+Ship* field guide. Before accepting an AI-assisted change, read the full diff,
+record meaningful decisions and alternatives, run the exact test checklist, and
+keep rollback and handover notes current. The current persistence milestone is
+tracked in `features/FEATURE-002-database-persistence.md`.

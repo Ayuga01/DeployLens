@@ -1,7 +1,10 @@
-.PHONY: install test run
+.PHONY: install migrate test run
 
 install:
 	uv sync --locked
+
+migrate:
+	uv run --locked alembic upgrade head
 
 test:
 	uv run --locked pytest

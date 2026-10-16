@@ -1,83 +1,81 @@
 """FastAPI application entrypoint for DeployLens."""
 
-from datetime import datetime
-from typing import Annotated, Any, Literal
+from collections.abc import Iterator
 
-from fastapi import FastAPI, HTTPException, Response, status
-from pydantic import BaseModel, Field, StringConstraints, field_validator
+from fastapi import Depends, FastAPI, HTTPException, Response, status
+from sqlalchemy import Engine
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-
-NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
-EventType = Literal[
-    "deployment",
-    "log",
-    "metric",
-    "trace",
-    "alert",
-    "kubernetes_event",
-]
-Severity = Literal["debug", "info", "warning", "error", "critical"]
+from app.database import create_db_engine, get_session, session_factory
+from app.repository import add_event, get_event, to_event
+from app.schemas import Event
 
 
-class Event(BaseModel):
-    """A normalized event accepted by the ingestion API."""
+def create_app(*, database_url: str | None = None, engine: Engine | None = None) -> FastAPI:
+    """Create an application using an injectable SQLAlchemy engine."""
 
-    event_id: NonEmptyString
-    source: NonEmptyString
-    event_type: EventType
-    service: NonEmptyString
-    timestamp: datetime
-    severity: Severity
-    message: NonEmptyString
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    application = FastAPI(title="DeployLens API", version="0.1.0")
+    app_engine = engine or create_db_engine(database_url)
+    app_session_factory = session_factory(app_engine)
 
-    @field_validator("timestamp")
-    @classmethod
-    def timestamp_must_be_timezone_aware(cls, value: datetime) -> datetime:
-        """Reject timestamps that do not identify a timezone or UTC offset."""
+    def session_dependency() -> Iterator[Session]:
+        with app_session_factory() as session:
+            yield session
 
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("timestamp must include timezone information")
-        return value
+    application.dependency_overrides[get_session] = session_dependency
+
+    @application.get("/health")
+    def health() -> dict[str, str]:
+        """Return the service liveness status."""
+
+        return {"status": "ok", "service": "deploylens-api"}
+
+    @application.post("/events", response_model=Event, status_code=status.HTTP_201_CREATED)
+    def ingest_event(
+        event: Event,
+        response: Response,
+        session: Session = Depends(get_session),
+    ) -> Event:
+        """Store an event, applying idempotency by event ID."""
+
+        existing = get_event(session, event.event_id)
+        if existing is not None:
+            existing_event = to_event(existing)
+            if existing_event == event:
+                response.status_code = status.HTTP_200_OK
+                return existing_event
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="event_id already exists with a different payload",
+            )
+
+        try:
+            return to_event(add_event(session, event))
+        except IntegrityError:
+            # Another request may have inserted the same ID after the first read.
+            concurrent = get_event(session, event.event_id)
+            if concurrent is not None and to_event(concurrent) == event:
+                response.status_code = status.HTTP_200_OK
+                return to_event(concurrent)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="event_id already exists with a different payload",
+            ) from None
+
+    @application.get("/events/{event_id}", response_model=Event)
+    def read_event(event_id: str, session: Session = Depends(get_session)) -> Event:
+        """Read a previously ingested event by ID."""
+
+        persisted = get_event(session, event_id)
+        if persisted is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="event not found")
+        return to_event(persisted)
+
+    return application
 
 
-# This repository is intentionally in-memory until persistent storage is added.
-events: dict[str, Event] = {}
+app = create_app()
 
-app = FastAPI(title="DeployLens API", version="0.1.0")
-
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    """Return the service liveness status."""
-
-    return {"status": "ok", "service": "deploylens-api"}
-
-
-@app.post("/events", response_model=Event, status_code=status.HTTP_201_CREATED)
-def ingest_event(event: Event, response: Response) -> Event:
-    """Store an event, applying idempotency by event ID."""
-
-    existing = events.get(event.event_id)
-    if existing is None:
-        events[event.event_id] = event
-        return event
-
-    if existing == event:
-        response.status_code = status.HTTP_200_OK
-        return existing
-
-    raise HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
-        detail="event_id already exists with a different payload",
-    )
-
-
-@app.get("/events/{event_id}", response_model=Event)
-def get_event(event_id: str) -> Event:
-    """Read a previously ingested event by ID."""
-
-    event = events.get(event_id)
-    if event is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="event not found")
-    return event
+# Keep the schema available to callers that import Event from app.main.
+__all__ = ["Event", "app", "create_app"]
