@@ -9,7 +9,7 @@ Done:
 - Added an offline SQLite test path and PostgreSQL configuration for Docker development.
 
 In progress:
-- Review and commit the PostgreSQL persistence milestone.
+- Push the persistence milestone to GitHub from an authenticated Mac terminal.
 - Add the first deterministic incident-correlation flow after persistence is stable.
 
 Broken or risky:
@@ -18,9 +18,9 @@ Broken or risky:
 - The API has no authentication, rate limiting, or tenant isolation yet. Do not treat it as production-ready.
 
 Next:
-- Run `uv lock --check`, `make test`, and the SQLite Alembic migration check.
-- Read the full diff, then commit the persistence change as one logical step.
-- Start incident correlation only after the persistence commit is pushed.
+- Run the Docker Desktop smoke path on the Mac: PostgreSQL, migration, API, and curl flow.
+- Push commit `888b260` after confirming GitHub authentication.
+- Start incident correlation only after the persistence milestone is available remotely.
 
 Do not touch:
 - Do not commit `.env`, database files, `.opencode/` attachments, or credentials.

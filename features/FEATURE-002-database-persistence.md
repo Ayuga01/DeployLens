@@ -28,7 +28,8 @@ Replace the process-local event dictionary with durable SQLAlchemy persistence w
 - Implemented SQLAlchemy engine/session configuration, ORM model, repository, and app factory.
 - Added Alembic migration and PostgreSQL driver.
 - Added isolated SQLite tests and migration checks.
-- Pending: review the full diff, verify on Docker Desktop, and commit.
+- Reviewed the full diff and committed as `888b260`.
+- Pending: verify the PostgreSQL/Docker Desktop path on the Mac.
 
 ## Open questions
 
