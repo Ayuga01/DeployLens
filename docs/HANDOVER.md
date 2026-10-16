@@ -16,10 +16,12 @@ Done:
   migration.
 - Recorded BUG-001 and BUG-002 and made the local PostgreSQL and API ports
   configurable.
+- Committed the deterministic correlation milestone as `081d63e`; it is not
+  pushed until the Mac PostgreSQL smoke path is verified.
 
 In progress:
-- Review and commit the incident-correlation milestone.
 - Verify the correlation endpoint against the Mac's running PostgreSQL API.
+- Push the incident-correlation milestone after Mac verification.
 
 Broken or risky:
 - Docker is unavailable in the current worker, so PostgreSQL behavior remains
@@ -29,10 +31,9 @@ Broken or risky:
   relationships or use an LLM yet.
 
 Next:
-- Review the full diff, run the offline checks, and commit this milestone.
 - On the Mac, use the running PostgreSQL API and call `/incidents/correlate` with
   `PORT=8001` and the database host port currently in use.
-- Push the incident-correlation commit after Mac verification.
+- Push commit `081d63e` after the correlation smoke test succeeds.
 
 Do not touch:
 - Do not commit `.env`, database files, `.opencode/` attachments, or
