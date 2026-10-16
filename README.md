@@ -15,8 +15,20 @@ versions from `uv.lock`.
 ## Setup
 
 ```bash
+# Install the exact interpreter pinned by .python-version.
+uv python install 3.11.2
+
+# Recreate a stale project environment whose interpreter is missing.
+if [ -d .venv ] && ! .venv/bin/python --version >/dev/null 2>&1; then
+  rm -rf .venv
+fi
+
 uv sync --locked
 ```
+
+The stale-environment check is safe to repeat: it removes `.venv` only when its
+Python executable cannot run, and `uv sync --locked` recreates it. Keep
+`.python-version` pinned to `3.11.2`.
 
 To configure local environment values, copy `.env.example` to `.env`. The
 default `DATABASE_URL` is `sqlite:///./deploylens.db`, so local development
@@ -24,8 +36,12 @@ does not require Docker or PostgreSQL. The PostgreSQL URL supported by the
 included Compose service is:
 
 ```text
-postgresql+psycopg://deploylens:deploylens@localhost:5432/deploylens
+postgresql+psycopg://deploylens:deploylens@localhost:5433/deploylens
 ```
+
+Compose keeps PostgreSQL on container port `5432` and maps host port `5433` by
+default. Set `POSTGRES_HOST_PORT` to another free host port when needed, and
+use the same port in `DATABASE_URL`.
 
 Apply the schema before starting the API:
 
@@ -38,8 +54,16 @@ migrations. For example, to use PostgreSQL locally:
 
 ```bash
 docker compose up -d postgres
-DATABASE_URL=postgresql+psycopg://deploylens:deploylens@localhost:5432/deploylens make migrate
-DATABASE_URL=postgresql+psycopg://deploylens:deploylens@localhost:5432/deploylens make run
+DATABASE_URL=postgresql+psycopg://deploylens:deploylens@localhost:5433/deploylens make migrate
+DATABASE_URL=postgresql+psycopg://deploylens:deploylens@localhost:5433/deploylens make run
+```
+
+To override the host port, keep the container port at `5432` and mirror the
+override in the database URL. For example:
+
+```bash
+POSTGRES_HOST_PORT=55432 docker compose up -d postgres
+DATABASE_URL=postgresql+psycopg://deploylens:deploylens@localhost:55432/deploylens make migrate
 ```
 
 ## Run

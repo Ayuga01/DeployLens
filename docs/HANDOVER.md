@@ -7,19 +7,22 @@ Done:
 - Added normalized event ingestion with idempotency and conflict handling.
 - Replaced the in-memory event store with SQLAlchemy persistence and an Alembic migration.
 - Added an offline SQLite test path and PostgreSQL configuration for Docker development.
+- Recorded BUG-001 and prepared the local setup repair: configurable Compose host port with a `5433` default, pinned-runtime installation instructions, and stale `.venv` recovery steps.
 
 In progress:
-- Push the persistence milestone to GitHub from an authenticated Mac terminal.
+- Verify the local setup repair on the Mac with Docker Desktop and the pinned uv runtime.
 - Add the first deterministic incident-correlation flow after persistence is stable.
 
 Broken or risky:
+- The Mac setup reported a Compose bind failure on host port `5432` and a stale `.venv` pointing to a missing interpreter; the repair is unverified on the Mac.
 - Docker is unavailable in the current worker, so the PostgreSQL container and Docker image have not been run here.
 - The default local database is SQLite; PostgreSQL behavior must be smoke-tested on the Mac with Docker Desktop.
 - The API has no authentication, rate limiting, or tenant isolation yet. Do not treat it as production-ready.
 
 Next:
-- Run the Docker Desktop smoke path on the Mac: PostgreSQL, migration, API, and curl flow.
-- Push commit `888b260` after confirming GitHub authentication.
+- On the Mac, run `uv python install 3.11.2`, remove `.venv` if `.venv/bin/python --version` fails, then run `uv sync --locked`.
+- Verify `docker compose config`, `docker compose up -d postgres`, the migration, API, and curl flow using host port `5433`; set `POSTGRES_HOST_PORT` and mirror it in `DATABASE_URL` if `5433` is occupied.
+- Push the setup repair commit after the Mac verification succeeds.
 - Start incident correlation only after the persistence milestone is available remotely.
 
 Do not touch:

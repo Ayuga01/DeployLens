@@ -47,3 +47,27 @@ Why: Contributors can run the core API and tests without a service dependency, w
 Trade-off: SQLite is not identical to PostgreSQL for concurrency, JSON behavior, and timestamp storage.
 
 Revisit if: PostgreSQL-specific behavior becomes part of the acceptance criteria for a feature.
+
+## D-004: Map the Compose PostgreSQL service to a configurable host port
+
+Date: 2026-10-16  Model: omnirush/gpt-6-astra
+
+Context: The Mac setup path failed because host port `5432` was already in use,
+while the PostgreSQL container still needs its standard internal port `5432`.
+
+Options: Keep a fixed host port `5432`, use a configurable host port with a
+collision-safer default, or assign a random host port.
+
+Chosen: Use `POSTGRES_HOST_PORT` for the host mapping, defaulting to `5433`,
+while retaining container port `5432`.
+
+Why: Port `5433` avoids the common local PostgreSQL binding by default, and an
+explicit environment variable lets a developer choose another free port without
+changing the Compose file or application behavior. The README and example
+environment keep the database URL aligned with the default.
+
+Trade-off: Developers must use the mapped host port in `DATABASE_URL`, and
+`5433` can still be occupied on an individual machine.
+
+Revisit if: The project needs a standard host port for a shared local workflow
+or a dynamically assigned port becomes preferable.
