@@ -1,15 +1,18 @@
 """FastAPI application entrypoint for DeployLens."""
 
 from collections.abc import Iterator
+from datetime import datetime
 
-from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
+from pydantic import ValidationError
 from sqlalchemy import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import create_db_engine, get_session, session_factory
-from app.repository import add_event, get_event, to_event
-from app.schemas import Event
+from app.correlation import correlate_events
+from app.repository import add_event, get_event, get_events_for_correlation, to_event
+from app.schemas import CorrelationQuery, Event, IncidentCorrelation
 
 
 def create_app(*, database_url: str | None = None, engine: Engine | None = None) -> FastAPI:
@@ -22,6 +25,26 @@ def create_app(*, database_url: str | None = None, engine: Engine | None = None)
     def session_dependency() -> Iterator[Session]:
         with app_session_factory() as session:
             yield session
+
+    def correlation_query(
+        service: str = Query(...),
+        start_time: datetime = Query(...),
+        end_time: datetime = Query(...),
+    ) -> CorrelationQuery:
+        """Turn query parameters into the shared schema and expose clear 422 errors."""
+
+        try:
+            return CorrelationQuery(
+                service=service,
+                start_time=start_time,
+                end_time=end_time,
+            )
+        except ValidationError as exc:
+            detail = "; ".join(error["msg"] for error in exc.errors())
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=detail,
+            ) from exc
 
     application.dependency_overrides[get_session] = session_dependency
 
@@ -71,6 +94,21 @@ def create_app(*, database_url: str | None = None, engine: Engine | None = None)
         if persisted is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="event not found")
         return to_event(persisted)
+
+    @application.get("/incidents/correlate", response_model=IncidentCorrelation)
+    def correlate_incident(
+        query: CorrelationQuery = Depends(correlation_query),
+        session: Session = Depends(get_session),
+    ) -> IncidentCorrelation:
+        """Return a deterministic summary of persisted events for a time window."""
+
+        persisted_events = get_events_for_correlation(
+            session,
+            service=query.service,
+            start_time=query.start_time,
+            end_time=query.end_time,
+        )
+        return correlate_events(query, persisted_events)
 
     return application
 

@@ -1,6 +1,8 @@
 """Persistence operations for normalized events."""
 
-from sqlalchemy import select
+from datetime import datetime
+
+from sqlalchemy import func, literal, select
 from sqlalchemy.orm import Session
 
 from app.models import EventModel
@@ -11,6 +13,39 @@ def get_event(session: Session, event_id: str) -> EventModel | None:
     """Find an event by its unique public identifier."""
 
     return session.scalar(select(EventModel).where(EventModel.event_id == event_id))
+
+
+def get_events_for_correlation(
+    session: Session,
+    *,
+    service: str,
+    start_time: datetime,
+    end_time: datetime,
+) -> list[EventModel]:
+    """Load one service's events inside an inclusive, deterministic time window."""
+
+    if session.get_bind().dialect.name == "sqlite":
+        # SQLite stores offsets as text through AwareDateTime. julianday makes
+        # comparisons and ordering use the represented instant, not the text's
+        # local-clock prefix, while keeping the filtering in SQL.
+        timestamp_value = func.julianday(EventModel.timestamp)
+        start_value = func.julianday(literal(start_time.isoformat()))
+        end_value = func.julianday(literal(end_time.isoformat()))
+    else:
+        timestamp_value = EventModel.timestamp
+        start_value = start_time
+        end_value = end_time
+
+    statement = (
+        select(EventModel)
+        .where(
+            EventModel.service == service,
+            timestamp_value >= start_value,
+            timestamp_value <= end_value,
+        )
+        .order_by(timestamp_value.asc(), EventModel.event_id.asc())
+    )
+    return list(session.scalars(statement).all())
 
 
 def add_event(session: Session, event: Event) -> EventModel:

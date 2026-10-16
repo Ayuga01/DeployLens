@@ -11,16 +11,20 @@ HTTP client
 FastAPI routes (app/main.py)
     |
     v
-Pydantic Event schema (app/schemas.py)
+Pydantic schemas (app/schemas.py)
     |
-    v
-SQLAlchemy repository (app/repository.py)
+    +--> SQLAlchemy repository (app/repository.py)
+    |        |
+    |        v
+    |    SQLAlchemy Session -> SQLite locally / PostgreSQL in Docker
+    |        |
+    |        v
+    |    events table (Alembic-managed)
     |
-    v
-SQLAlchemy Session -> SQLite locally / PostgreSQL in Docker
-    |
-    v
-events table (Alembic-managed)
+    +--> deterministic correlation (app/correlation.py)
+             |
+             v
+        IncidentCorrelation response
 ```
 
 ## Trust boundaries
@@ -33,7 +37,12 @@ events table (Alembic-managed)
 ## Ownership
 
 - `app/main.py`: HTTP status codes, dependency wiring, and route behavior.
-- `app/schemas.py`: public input/output contract.
+- `app/schemas.py`: public event and correlation input/output contracts.
 - `app/models.py`: database table mapping and timestamp conversion.
-- `app/repository.py`: persistence operations and ORM-to-schema conversion.
+- `app/repository.py`: persistence operations, SQL filtering/order, and ORM-to-schema conversion.
+- `app/correlation.py`: deterministic counts and latest-deployment selection over repository results.
 - `alembic/`: versioned schema changes.
+
+## Incident correlation boundary
+
+`GET /incidents/correlate` validates the service and timezone-aware interval at the HTTP boundary, then asks the repository for exactly that service and inclusive timestamp window. SQL orders rows by timestamp and `event_id`; the correlation module only summarizes those rows. No AI model, external service, queue, or automatic remediation participates in this path.

@@ -121,3 +121,32 @@ Trade-off: Developers must choose a free port when the default is occupied.
 
 Revisit if: The project gains a managed local development server or a frontend
 needs automatic API discovery.
+
+## D-007: Filter persisted events deterministically before correlation
+
+Date: 2026-10-16  Model: omnirush/gpt-6-astra
+
+Context: Incident correlation needs to explain exactly which persisted events
+contributed to a service/time-window summary.
+
+Options: Filter and order in SQL before a small in-process summary, load a
+broader set and filter in application code, or send the event set to an AI
+model for inferred correlation.
+
+Chosen: Apply exact service and inclusive timestamp predicates in the
+SQLAlchemy repository, order by timestamp and `event_id`, then calculate
+counts and the latest deployment in `app/correlation.py`.
+
+Why: Database filtering limits the result to the requested evidence, indexed
+fields do the selection close to storage, and an explicit tie-breaker makes
+repeated calls reproducible. A small summary is easy to inspect and test.
+AI-based correlation would be harder to explain and would violate the
+feature's deterministic behavior; broad application-side filtering would do
+more work and make the data boundary less obvious.
+
+Trade-off: The response is intentionally rule-based and does not infer causal
+relationships between events. Additional indexes or a richer correlation
+model can be considered when real query workloads justify them.
+
+Revisit if: Incident analysis needs relationships that cannot be expressed by
+the persisted event fields and deterministic rules.

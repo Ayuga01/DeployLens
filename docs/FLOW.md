@@ -27,3 +27,22 @@ GET /events/{event_id}
       -> no row: return 404
   -> session closes
 ```
+
+## GET /incidents/correlate
+
+```text
+GET /incidents/correlate?service=...&start_time=...&end_time=...
+  -> FastAPI parses query parameters
+  -> correlation query schema validates non-empty service, timezone-aware datetimes,
+     and end_time >= start_time
+      -> invalid input: return a clear 422
+  -> open session
+  -> repository filters events.service exactly and timestamp inclusively
+  -> repository orders by timestamp ascending, then event_id ascending
+  -> correlation module converts rows and calculates sorted type/severity counts
+     and the final deployment in that deterministic order
+  -> return IncidentCorrelation with events and latest_deployment (or null)
+  -> session closes
+```
+
+An unknown service or a valid window with no rows follows the same path and returns a successful empty correlation result. Filtering and ordering happen in SQL before the explainable in-process summary.

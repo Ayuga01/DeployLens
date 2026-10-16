@@ -22,6 +22,8 @@ Expected result: all tests pass; `make test` must not need Docker, PostgreSQL, a
 5. Submit the same event again and verify `200`.
 6. Change the message and verify `409`.
 7. Read the event back with `GET /events/{event_id}`.
+8. Call `/incidents/correlate` for the service and time window and verify the
+   returned event count, ordering, counts, and latest deployment.
 
 ## Known gap
 

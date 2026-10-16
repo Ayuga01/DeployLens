@@ -129,6 +129,16 @@ curl http://127.0.0.1:8000/events/evt-123
 The first submission returns `201 Created`, an identical retry returns `200 OK`,
 and reusing an `event_id` with a different payload returns `409 Conflict`.
 
+Correlate persisted events for one service and an inclusive time window:
+
+```bash
+curl 'http://127.0.0.1:8000/incidents/correlate?service=checkout&start_time=2025-01-01T12:00:00Z&end_time=2025-01-01T13:00:00Z'
+```
+
+The response contains the matching events in chronological order, counts by
+event type and severity, and the most recent deployment. This path is currently
+deterministic and rule-based; it does not call an LLM.
+
 The equivalent Make target is `make run` (without reload).
 
 ## Test
