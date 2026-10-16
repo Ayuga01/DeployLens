@@ -1,7 +1,7 @@
 # DeployLens API
 
-DeployLens is a minimal FastAPI service foundation. The first endpoint is a
-liveness check at `GET /health`.
+DeployLens is a minimal FastAPI service foundation with liveness and normalized
+event ingestion endpoints. Events are stored in memory for now.
 
 ## Requirements
 
@@ -39,6 +39,28 @@ Expected response:
 {"status":"ok","service":"deploylens-api"}
 ```
 
+Ingest an event and read it back by its `event_id`:
+
+```bash
+curl -i -X POST http://127.0.0.1:8000/events \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "event_id": "evt-123",
+    "source": "github-actions",
+    "event_type": "deployment",
+    "service": "checkout",
+    "timestamp": "2025-01-01T12:00:00Z",
+    "severity": "info",
+    "message": "Deployment completed",
+    "metadata": {"environment": "production"}
+  }'
+
+curl http://127.0.0.1:8000/events/evt-123
+```
+
+The first submission returns `201 Created`, an identical retry returns `200 OK`,
+and reusing an `event_id` with a different payload returns `409 Conflict`.
+
 The equivalent Make target is `make run` (without reload).
 
 ## Test
@@ -73,7 +95,7 @@ is not required by the current health endpoint.
 
 ## Project layout
 
-- `app/main.py` — FastAPI application and `/health` route
-- `tests/test_health.py` — offline health endpoint test
+- `app/main.py` — FastAPI application, health route, and in-memory event repository
+- `tests/test_health.py` / `tests/test_events.py` — offline endpoint tests
 - `pyproject.toml` / `uv.lock` — project metadata and locked dependencies
 - `Dockerfile` / `docker-compose.yml` — container and local database setup
