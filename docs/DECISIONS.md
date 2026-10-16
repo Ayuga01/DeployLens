@@ -98,3 +98,26 @@ download availability changes. Record the actual `Python 3.11.x` output from
 
 Revisit if: The project requires byte-for-byte interpreter reproducibility or a
 specific 3.11.x patch becomes available and supportable on every target.
+
+## D-006: Make the API host port configurable
+
+Date: 2026-10-16  Model: omnirush/gpt-6-astra
+
+Context: The PostgreSQL migration succeeded, but Uvicorn could not start because
+another local process already occupied host port `8000`.
+
+Options: Require developers to stop the other process, automatically select a
+random port, or expose `HOST` and `PORT` Make variables.
+
+Chosen: Keep the predictable default `0.0.0.0:8000` and allow overrides with
+`HOST=... PORT=... make run`.
+
+Why: A stable default keeps README examples and scripts simple, while an
+explicit override avoids hiding which port the smoke test is using. Automatic
+selection would make curl commands and deployment configuration less
+reproducible.
+
+Trade-off: Developers must choose a free port when the default is occupied.
+
+Revisit if: The project gains a managed local development server or a frontend
+needs automatic API discovery.

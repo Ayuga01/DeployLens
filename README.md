@@ -69,6 +69,18 @@ DATABASE_URL=postgresql+psycopg://deploylens:deploylens@localhost:5433/deploylen
 DATABASE_URL=postgresql+psycopg://deploylens:deploylens@localhost:5433/deploylens make run
 ```
 
+`make run` listens on `0.0.0.0:8000` by default. If port `8000` is already
+occupied by another process, choose a free host port without changing the
+application:
+
+```bash
+PORT=8001 DATABASE_URL=postgresql+psycopg://deploylens:deploylens@localhost:5433/deploylens make run
+curl http://127.0.0.1:8001/health
+```
+
+You can also set `HOST`, for example `HOST=127.0.0.1 PORT=8001 make run`. The
+`.env.example` file documents values but is not automatically sourced by Make.
+
 To override the host port, keep the container port at `5432` and mirror the
 override in the database URL. For example:
 

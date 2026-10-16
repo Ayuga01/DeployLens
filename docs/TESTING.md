@@ -18,9 +18,10 @@ Expected result: all tests pass; `make test` must not need Docker, PostgreSQL, a
 1. Apply the schema with `make migrate`.
 2. Start the API with `make run`.
 3. Submit an event using the README `curl` example.
-4. Submit the same event again and verify `200`.
-5. Change the message and verify `409`.
-6. Read the event back with `GET /events/{event_id}`.
+4. If port `8000` is occupied, start the API with `PORT=8001 make run` and use port `8001` for the remaining curl commands.
+5. Submit the same event again and verify `200`.
+6. Change the message and verify `409`.
+7. Read the event back with `GET /events/{event_id}`.
 
 ## Known gap
 
