@@ -71,3 +71,30 @@ Trade-off: Developers must use the mapped host port in `DATABASE_URL`, and
 
 Revisit if: The project needs a standard host port for a shared local workflow
 or a dynamically assigned port becomes preferable.
+
+## D-005: Pin the Python 3.11 minor line instead of an unavailable patch
+
+Date: 2026-10-16  Model: omnirush/gpt-6-astra
+
+Context: The Mac ARM setup reported `No download found for request:
+cpython-3.11.2-macos-aarch64-none` for `uv python install 3.11.2`, and the
+following `uv sync` could not find Python 3.11.2. uv's managed Python downloads
+are frozen per uv release.
+
+Options: Keep the exact `3.11.2` pin, pin the `3.11` minor line, or rely on an
+unmanaged system Python.
+
+Chosen: Pin `.python-version` to `3.11`, install it with `uv python install
+3.11`, and retain `pyproject.toml`'s `>=3.11,<3.12` requirement.
+
+Why: The minor-line request lets uv select an available 3.11.x patch on the
+target platform while preserving the project's supported runtime range. It
+fixes the documented Mac ARM bootstrap failure without changing application
+code, dependencies, or the lockfile.
+
+Trade-off: The selected patch is resolved by uv/system and can vary as uv
+download availability changes. Record the actual `Python 3.11.x` output from
+`uv run --locked python --version` in `docs/HANDOVER.md` after setup.
+
+Revisit if: The project requires byte-for-byte interpreter reproducibility or a
+specific 3.11.x patch becomes available and supportable on every target.

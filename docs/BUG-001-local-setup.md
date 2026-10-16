@@ -10,25 +10,32 @@ locked dependencies.
 - `docker compose up -d postgres` failed because host port `5432` was already in
   use.
 - `uv` failed during setup because the existing project `.venv` referenced a
-  Python interpreter that was no longer present, and the pinned Python `3.11.2`
-  was not installed in the managed `uv` runtimes.
+  Python interpreter that was no longer present, and the pinned Python patch
+  `3.11.2` was not available in the managed `uv` runtimes for the Mac ARM
+  request.
 
 ## Evidence
 
 - The original Compose mapping was the fixed binding `5432:5432`.
-- `.python-version` pins the project to the exact version `3.11.2`.
+- Before this repair, `.python-version` pinned the project to the exact version
+  `3.11.2`.
 - The setup instructions ran `uv sync --locked` before installing that pinned
   runtime or checking whether `.venv/bin/python` could still execute.
-- The user's Mac terminal reported the host-port collision and missing exact
-  Python interpreter described above.
+- The user's Mac terminal reported:
+  `uv python install 3.11.2` → `No download found for request:
+  cpython-3.11.2-macos-aarch64-none`.
+- The same machine then reported that `uv sync` could not find Python 3.11.2.
+- The uv documentation explains that managed Python downloads are frozen per uv
+  release and recommends installing an available minor line such as `3.11`.
 
 ## Root cause
 
-Two machine-local assumptions were encoded in the setup path: host port `5432`
-was assumed to be free, and an existing `.venv` was assumed to remain valid
-after its original interpreter disappeared. The project pin itself is correct;
-the missing managed runtime and stale environment prevented `uv` from resolving
-the requested interpreter.
+Three machine-local assumptions were encoded in the setup path: host port
+`5432` was assumed to be free, an existing `.venv` was assumed to remain valid
+after its original interpreter disappeared, and an exact Python patch was
+assumed to be available in the installed uv release. The Mac ARM download
+request proved that `3.11.2` is not available there, so the exact patch pin
+prevented uv from resolving the runtime.
 
 ## Fix
 
@@ -38,25 +45,33 @@ the requested interpreter.
   `.env.example`.
 - Update README commands and URLs to use `5433`, and document an override for a
   different free host port.
-- Update setup instructions to run `uv python install 3.11.2`, remove `.venv`
-  only when its Python executable cannot run, and then run `uv sync --locked`.
-- Leave `.python-version`, `uv.lock`, application code, and dependencies
-  unchanged.
+- Pin `.python-version` to the available Python `3.11` minor line and update
+  setup instructions to run `uv python install 3.11`, remove `.venv` only when
+  its Python executable cannot run, and then run `uv sync --locked`.
+- Keep `pyproject.toml`'s `>=3.11,<3.12` requirement, `uv.lock`, application
+  code, and dependencies unchanged.
+
+If the minor-line install still reports that no download is available, update uv
+when it came from Homebrew and retry:
+
+```bash
+brew update && brew upgrade uv
+```
 
 ## Mac verification commands
 
 Run these from the repository root on the Mac:
 
 ```bash
-test "$(cat .python-version)" = "3.11.2"
-uv python install 3.11.2
+test "$(cat .python-version)" = "3.11"
+uv python install 3.11
 
 if [ -d .venv ] && ! .venv/bin/python --version >/dev/null 2>&1; then
   rm -rf .venv
 fi
 
 uv sync --locked
-uv run --locked python --version
+uv run --locked python --version  # expect Python 3.11.x
 make test
 
 docker compose config
@@ -97,4 +112,5 @@ docker compose down
 - A different local process can still occupy `5433`; the documented override is
   the recovery path.
 - The Mac-specific `uv` runtime installation and stale-environment recovery still
-  need to be run and confirmed on the user's machine.
+  need to be run and confirmed on the user's machine. Record the selected
+  `Python 3.11.x` from `uv run --locked python --version` in the handover.

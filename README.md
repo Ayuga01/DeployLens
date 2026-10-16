@@ -5,18 +5,26 @@ event ingestion endpoints. Events are persisted with SQLAlchemy and Alembic.
 
 ## Requirements
 
-- Python 3.11.2
+- Python 3.11
 - [uv](https://docs.astral.sh/uv/) 0.13.0 or compatible
 
-The pinned Python version is recorded in `.python-version`. `uv` creates the
+The pinned Python minor line is recorded in `.python-version`. `uv` creates the
 project-local virtual environment in `.venv` and installs the exact locked
-versions from `uv.lock`.
+dependency versions from `uv.lock`.
+
+`uv`'s managed Python downloads are frozen per uv release. If the install below
+reports that no download is available, upgrade uv first when it was installed
+with Homebrew:
+
+```bash
+brew update && brew upgrade uv
+```
 
 ## Setup
 
 ```bash
-# Install the exact interpreter pinned by .python-version.
-uv python install 3.11.2
+# Install an available interpreter from the 3.11 line pinned by .python-version.
+uv python install 3.11
 
 # Recreate a stale project environment whose interpreter is missing.
 if [ -d .venv ] && ! .venv/bin/python --version >/dev/null 2>&1; then
@@ -24,11 +32,14 @@ if [ -d .venv ] && ! .venv/bin/python --version >/dev/null 2>&1; then
 fi
 
 uv sync --locked
+uv run --locked python --version  # expected: Python 3.11.x
 ```
 
 The stale-environment check is safe to repeat: it removes `.venv` only when its
 Python executable cannot run, and `uv sync --locked` recreates it. Keep
-`.python-version` pinned to `3.11.2`.
+`.python-version` pinned to the `3.11` minor line. The specific 3.11.x patch is
+selected by uv from the downloads available to the installed uv release and
+should be recorded from the version-check output in `docs/HANDOVER.md`.
 
 To configure local environment values, copy `.env.example` to `.env`. The
 default `DATABASE_URL` is `sqlite:///./deploylens.db`, so local development
